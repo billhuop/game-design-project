@@ -1,0 +1,260 @@
+import random
+
+# BOSSES List with Shadow of Souls added
+BOSSES = [
+    {
+        "name": "Webbed Widow",
+        "health": 8,
+        "attack": 5,
+        "defence": 3,
+        "speed": 1,
+        "accuracy": 4,
+        "special": "web_stun",
+        "special_cooldown": 2
+    },
+    {
+        "name": "Illusive Jester",
+        "health": 5,
+        "attack": 5,
+        "defence": 2,
+        "speed": 3,
+        "accuracy": 3,
+        "special": "warped_terrain",
+        "special_cooldown": 3,
+        "passive": "mind_tricks"
+    },
+    {
+        "name": "Danger Cloud",
+        "health": 4,
+        "attack": 6,
+        "defence": 2,
+        "speed": 4,
+        "accuracy": 4,
+        "special": "thunder_forecast",
+        "special_cooldown": 2,
+        "passive": "cloud_absorption"
+    },
+    {
+        "name": "Shadow of Souls",
+        "health": 6,
+        "attack": 4,
+        "defence": 4,
+        "speed": 1,
+        "accuracy": 4,
+        "special": "soul_syphon",
+        "special_cooldown": 0,
+        "passive": "circle_of_life",
+        "souls": 5
+    }
+]
+
+new_game_plus = 0  # Tracks the number of times the game has been completed
+
+def display_stats(player_stats, boss_stats):
+    print("\nPLAYER STATS:")
+    for stat, value in player_stats.items():
+        print(f"{stat.capitalize()}: {value}")
+
+    print("\nBOSS STATS:")
+    for stat, value in boss_stats.items():
+        print(f"{stat.capitalize()}: {value}")
+
+def allocate_character_points():
+    global new_game_plus
+    character_points = 15 + (new_game_plus * 3)
+    player_stats = {"health": 1 + new_game_plus, "attack": 0, "defence": 0, "speed": 0, "accuracy": 0}
+
+    while character_points > 0:
+        print("\nINVEST CHARACTER POINTS")
+        print(f"Character Points Remaining: {character_points}")
+        display_stats(player_stats, {})
+        print("\n1. Health\n2. Attack\n3. Defence\n4. Speed\n5. Accuracy")
+        choice = int(input("Choose a stat to improve: "))
+        if choice in range(1, 6):
+            stat = list(player_stats.keys())[choice - 1]
+            player_stats[stat] += 1
+            character_points -= 1
+        else:
+            print("Invalid input. Try again.")
+
+    return player_stats
+
+def manage_cooldowns(cooldowns):
+    for key in cooldowns:
+        if cooldowns[key] > 0:
+            cooldowns[key] -= 1
+
+def boss_attack_action(boss, choice, boss_accuracy, boss_attack, player_defence, player_health, player_stunned, shield_active, special_cooldown, cloud_turns=0):
+    if boss["name"] == "Shadow of Souls":
+        # Special handling for Shadow of Souls
+        if boss["souls"] == 0 and choice in ["soul_syphon", "soul_blade", "life_leech"]:
+            print("The Shadow of Souls has no souls to perform this ability!")
+            return player_health, player_stunned, special_cooldown, cloud_turns
+
+        if choice == "soul_syphon":
+            # Soul Syphon: Restore 1 health for 1 soul
+            if boss["souls"] >= 1:
+                print(f"The Shadow of Souls uses Soul Syphon, restoring 1 health!")
+                boss["souls"] -= 1
+                return player_health, player_stunned, special_cooldown, cloud_turns
+
+        elif choice == "soul_blade":
+            # Soul Blade: Does extra damage based on the number of losses
+            if boss["souls"] >= 2:
+                loss_multiplier = new_game_plus  # Extra damage based on how many games the player has lost
+                damage = max((boss_attack - player_defence) + loss_multiplier, 1)
+                print(f"The Shadow of Souls strikes with the Soul Blade, dealing {damage} damage!")
+                player_health -= damage
+                boss["souls"] -= 2
+                return player_health, player_stunned, special_cooldown, cloud_turns
+
+        elif choice == "life_leech":
+            # Life Leech: Steal health equal to the damage inflicted (3 souls)
+            if boss["souls"] >= 3:
+                damage = max(boss_attack - player_defence, 1)
+                print(f"The Shadow of Souls uses Life Leech, dealing {damage} damage and restoring {damage} health!")
+                player_health -= damage
+                boss["health"] += damage
+                boss["souls"] -= 3
+                return player_health, player_stunned, special_cooldown, cloud_turns
+
+        elif choice == "soul_harvest":
+            # Soul Harvest: Gains 1 soul (zero cost)
+            print("The Shadow of Souls uses Soul Harvest, gaining 1 soul!")
+            boss["souls"] += 1
+            return player_health, player_stunned, special_cooldown, cloud_turns
+
+    elif boss["name"] == "Illusive Jester":
+        # Illusive Jester's Warped Terrain and Mind Tricks
+        if special_cooldown == 0 and choice == "warped_terrain":
+            print("The Illusive Jester creates warped terrain, halving your accuracy for 2 turns!")
+            special_cooldown = 3  # 3-turn cooldown
+            player_accuracy = max(player_accuracy // 2, 1)  # Halve accuracy, but not less than 1
+        elif special_cooldown > 0:
+            print("Illusive Jester's special ability is on cooldown!")
+        # Mind Tricks (Passive): Halve accuracy for 2 turns if the boss is still alive
+        if boss.get("passive") == "mind_tricks":
+            if random.random() < 0.5:
+                print("The Illusive Jester plays a trick, causing confusion!")
+                player_accuracy = max(player_accuracy // 2, 1)
+        return player_health, player_stunned, special_cooldown, cloud_turns
+
+    elif boss["name"] == "Danger Cloud":
+        # Thunder Forecast: Deals damage after 2 turns
+        if special_cooldown == 0 and cloud_turns == 2:
+            print("The Danger Cloud strikes you with a thunderous attack, dealing 2 damage!")
+            player_health -= 2
+            special_cooldown = 2
+            cloud_turns = 0
+        elif special_cooldown > 0:
+            print("Danger Cloud's special ability is on cooldown!")
+        # Cloud Absorption (Passive): Reduces damage by 1
+        if boss.get("passive") == "cloud_absorption":
+            print("Danger Cloud absorbs some of the damage!")
+            return max(player_health - 1, 1), player_stunned, special_cooldown, cloud_turns
+
+    else:
+        # Other bosses' actions
+        attack_types = {1: 1, 2: 0.5, 3: 2}
+        multiplier = attack_types.get(choice, 1)
+        accuracy_check = random.randint(1, 3 + boss_accuracy)
+
+        if accuracy_check <= 2:
+            print("The boss' attack missed!")
+        else:
+            damage = max((boss_attack - player_defence) * multiplier - (1 if boss.get("passive") == "cloud_absorption" else 0), 1)
+            print(f"The boss strikes you with a {['normal', 'fast', 'strong'][choice-1]} attack, dealing {damage} damage!")
+            player_health -= damage
+
+    print(f"You have {player_health} health left.")
+    return player_health, player_stunned, special_cooldown, cloud_turns
+
+def player_action(player_stats, boss_stats, cooldowns, state):
+    player_health = player_stats["health"]
+    boss_health = boss_stats["health"]
+    special_cooldown = cooldowns["special"]
+    cloud_turns = state["cloud_turns"]
+
+    print("\nChoose your action:")
+    print("1. Normal Attack\n2. Fast Attack\n3. Strong Attack\n4. Shield\n5. Gambler's Blade")
+    action = int(input("Enter your choice: "))
+
+    if action == 4 and cooldowns["shield"] == 0:
+        state["shield_active"] = True
+        cooldowns["shield"] = 2
+        print("You activate your shield! All damage and effects are blocked this turn.")
+    elif action == 5 and cooldowns["gambler_blade"] == 0:
+        damage_bonus = random.randint(1, 6)
+        accuracy_check = random.randint(1, 3 + player_stats["accuracy"])
+        if accuracy_check > 2:
+            damage = max(player_stats["attack"] - boss_stats["defence"] + damage_bonus, 1)
+            print(f"You use Gambler's Blade and deal {damage} damage (Bonus: {damage_bonus})!")
+            boss_stats["health"] -= damage
+        else:
+            print("Your Gambler's Blade attack missed!")
+        cooldowns["gambler_blade"] = 3
+    else:
+        attack_types = {1: 1, 2: 0.5, 3: 2}
+        multiplier = attack_types.get(action, 1)
+        accuracy_check = random.randint(1, 3 + player_stats["accuracy"])
+
+        if accuracy_check > 2:
+            damage = max((player_stats["attack"] - boss_stats["defence"]) * multiplier, 1)
+            print(f"You deal {damage} damage to the boss!")
+            boss_stats["health"] -= damage
+        else:
+            print("Your attack missed!")
+
+    return player_stats, boss_stats, cooldowns, state
+
+def play_round():
+    global new_game_plus
+    player_stats = allocate_character_points()
+    available_bosses = [boss for boss in BOSSES if (boss["name"] != "Shadow of Souls" or new_game_plus >= 3)]
+    current_boss = random.choice(available_bosses)
+    boss_stats = {key: current_boss[key] for key in ["name", "health", "attack", "defence", "speed", "accuracy"]}
+    boss_stats["health"] += new_game_plus
+    boss_stats["attack"] += new_game_plus
+    boss_stats["defence"] += new_game_plus
+    boss_stats["speed"] += new_game_plus
+    boss_stats["accuracy"] += new_game_plus
+
+    cooldowns = {"shield": 0, "gambler_blade": 0, "special": 0}
+    state = {"shield_active": False, "cloud_turns": 0, "stunned": False}
+
+    print(f"You encounter the {boss_stats['name']}!")
+
+    while player_stats["health"] > 0 and boss_stats["health"] > 0:
+        display_stats(player_stats, boss_stats)
+        if player_stats["speed"] > boss_stats["speed"]:
+            player_stats, boss_stats, cooldowns, state = player_action(player_stats, boss_stats, cooldowns, state)
+            if boss_stats["health"] <= 0:
+                print(f"You defeated the {boss_stats['name']}!")
+                break
+
+            player_stats, boss_stats, cooldowns, state = boss_attack_action(boss_stats, 1, boss_stats["accuracy"], boss_stats["attack"], player_stats["defence"], player_stats["health"], state["stunned"], state["shield_active"], cooldowns["special"], state["cloud_turns"])
+            if player_stats["health"] <= 0:
+                print(f"You were defeated by the {boss_stats['name']}.")
+                break
+
+        elif player_stats["speed"] <= boss_stats["speed"]:
+            player_stats, boss_stats, cooldowns, state = boss_attack_action(boss_stats, 1, boss_stats["accuracy"], boss_stats["attack"], player_stats["defence"], player_stats["health"], state["stunned"], state["shield_active"], cooldowns["special"], state["cloud_turns"])
+            if player_stats["health"] <= 0:
+                print(f"You were defeated by the {boss_stats['name']}.")
+                break
+            
+            player_stats, boss_stats, cooldowns, state = player_action(player_stats, boss_stats, cooldowns, state)
+            if boss_stats["health"] <= 0:
+                print(f"You defeated the {boss_stats['name']}!")
+                break
+
+        manage_cooldowns(cooldowns)
+
+    replay = input("Do you want to play again? (y/n): ").lower()
+    if replay == 'y':
+        new_game_plus += 1
+        play_round()
+    else:
+        print("Thanks for playing!")
+
+play_round()
